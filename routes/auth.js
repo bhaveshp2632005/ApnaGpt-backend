@@ -5,7 +5,8 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { JWT_SECRET, JWT_EXPIRES } from "../config.js";
 import { isAuthenticated } from "../middleware/authMiddleware.js"; // ✅ import middleware
-
+import dotenv from "dotenv";
+dotenv.config();
 const router = express.Router();
 
 // -------------------- SIGNUP --------------------
@@ -113,10 +114,11 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect: "http://localhost:5173/login",
+    failureRedirect: `${process.env.FRONTEND_URL}/login`, // ✅ dynamic login redirect
   }),
   (req, res) => {
-    res.redirect("http://localhost:5173/");
+    // ✅ success redirect to frontend root
+    res.redirect(`${process.env.FRONTEND_URL}/`);
   }
 );
 
@@ -138,25 +140,32 @@ router.post("/logout", (req, res) => {
 
 // -------------------- GET CURRENT USER (Google Auth) --------------------
 router.get("/me", (req, res) => {
-  if (req.isAuthenticated()) {
-    return res.json({
-      success: true,
-      user: {
-        id: req.user.id || req.user._id,
-        name: req.user.name || req.user.displayName,
-        email: req.user.email,
-        profilePic:
-          req.user.profilePic || req.user.picture || req.user.photo || null,
-      },
-    });
-  } else {
-    return res.status(401).json({
+  try {
+    if (req.isAuthenticated() && req.user) {
+      return res.status(200).json({
+        success: true,
+        user: {
+          id: req.user._id || req.user.id,
+          name: req.user.name,
+          email: req.user.email,
+          profilePic: req.user.profilePic || null,
+          authProvider: req.user.authProvider || "google",
+        },
+      });
+    } else {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+    }
+  } catch (err) {
+    console.error("Error in /auth/me:", err);
+    return res.status(500).json({
       success: false,
-      message: "Not authenticated",
+      message: "Server error",
     });
   }
 });
-
 // -------------------- AUTH STATUS --------------------
 router.get("/status", (req, res) => {
   res.json({
